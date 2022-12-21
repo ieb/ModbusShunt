@@ -1,0 +1,56 @@
+#include <Arduino.h>
+#include <Wire.h>
+
+#include "ina219.h"
+#define debug Serial1
+
+Ina219 ina219(&debug);
+
+bool ina219Ok = false;
+void setup(void) 
+{
+  Serial1.begin(115200);
+
+  uint32_t currentFrequency;
+    
+  Serial1.println("Hello!");
+  
+  if ( ina219.begin() != I2C_OK) {
+    ina219Ok = false;
+    debug.print("Failed to find INA219 chip, error:");
+    debug.println(ina219.getError());
+  } else {
+    ina219Ok = true;
+    debug.print("INA219 chip, Ok");
+  }
+
+  // To use a slightly lower 32V, 1A range (higher precision on amps):
+  //ina219.setCalibration_32V_1A();
+  // Or to use a lower 16V, 400mA range (higher precision on volts and amps):
+  //ina219.setCalibration_16V_400mA();
+
+  Serial1.println("Measuring voltage and current with INA219 ...");
+}
+
+void loop(void) 
+{
+  if ( !ina219Ok ) {
+    Serial1.println("No INA219 Chip found");
+    delay(1000);
+    return;
+  } 
+  float voltage = 0;
+  float current = 0;
+  float current_mA = 0;
+  float loadvoltage = 0;
+  float power_mW = 0;
+
+  voltage = ina219.getVoltage();
+  current = ina219.getCurrent();
+  
+  Serial1.print("Voltage:   "); Serial1.print(voltage); Serial1.println(" V");
+  Serial1.print("Current:       "); Serial1.print(current); Serial1.println(" A");
+  Serial1.println("");
+
+  delay(2000);
+}
