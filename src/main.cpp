@@ -31,44 +31,56 @@ extern int16_t readMCUTemperature();
 extern CommandLine commandLine;
 int16_t errorBitmap = 0x00;
 
+// MAX485 is on RX0/TX0 Serial, TX0==PB2 pin 7, RX0=PB3 pin 6
+// XDIR low to recieve, high to send on PA4 pin 4
+// Debug header is on Serial1
+
+#define rs485 Serial
+#define debug Serial1
+
 
 class InputRegisterImpl : public InputRegisters {
 	public:
 		bool hasRegister(int16_t reg) {
-			return ( reg >= 0 && reg <=3 );
+			return ( reg >= 0 && reg <=6 );
 		}	
 		int16_t getRegister(int16_t reg) {
+			int16_t value = 0;
 			switch(reg) {
 				case 0:
-					return readVoltage();
+					value = readVoltage();
+					break;
 				case 1:
-					return readCurrent();
+					value = readCurrent();
+					break;
 				case 2:
-					return readTemperature(1);
+					value = readTemperature(1);
+					break;
 				case 3: 
-					return readTemperature(2);
+					value = readTemperature(2);
+					break;
 				case 4: 
-					return errorBitmap;
+					value = (errorBitmap & 0xFF00) | rs485.getStatus();
+					break;
 				case 5:
-					return readMCUVoltage();
+					value =  readMCUVoltage();
+					break;
 				case 6:
-					int16_t t = readMCUTemperature();
-					return t*10;
-				default:
-					return 0;
-			}
+					value = 10*readMCUTemperature();
+					break;
 
+			}
+			debug.print(F("Input Register "));
+			debug.print(reg);
+			debug.print(F(" "));
+			debug.println(value);
+			return value;
 		};
 };
 // pins
 #define TEMP_NTC1_PIN PIN_PA4  // hardware pin 2
 #define TEMP_NTC2_PIN PIN_PA5  // hardware pin 3
 
-// JDY25M is on RX0/TX0 Serial
-// Debug header is on Serial1
-
-#define rs485 Serial
-#define debug Serial1
 
 InputRegisterImpl inputRegisters = InputRegisterImpl();
 HoldingRegisters holdingRegisters = HoldingRegisters(NUMBER_REGISTERS);
@@ -171,7 +183,7 @@ void setup() {
   ntcSensor.addSensor(TEMP_NTC2_PIN, 1);
   ntcSensor.begin();
 
-  commandLine.diagnosticsEnabled = false;
+  commandLine.diagnosticsEnabled = true;
 
 
 	 if (!ina219Ok) {
@@ -184,14 +196,18 @@ void setup() {
 int16_t readVoltage() {
 	int16_t voltage =  (int16_t)(1000.0*ina219.getVoltage());
 	if ( ina219.getError() != I2C_OK) {
-		errorBitmap |= 0x0001;
+		errorBitmap |= 0x0100;
+	} else {
+		errorBitmap &= 0xFEFF;
 	}
 	return voltage;
 }
 int16_t readCurrent() {
 	int16_t current =  (int16_t)(100*ina219.getCurrent());
 	if ( ina219.getError() != I2C_OK) {
-		errorBitmap |= 0x0002;
+		errorBitmap |= 0x0200;
+	} else {
+		errorBitmap &= 0xFDFF;
 	}
 	return current;
 }
@@ -208,11 +224,25 @@ int16_t readTemperature(int8_t ch) {
 
 void loop() {
 	static unsigned long clKeepAlive = 60000;
+	static unsigned long last = micros();
 	static int state = 0;
-	unsigned long now = millis();
+	//unsigned long now = millis();
   commandLine.checkCommand();
   modbus.setDiagnostics(commandLine.diagnosticsEnabled);
   modbus.readQuery();
+  /*
+  int16_t b = rs485.read();
+  unsigned long now = micros();
+  if ( b >= 0) {
+
+  	debug.print(now-last);
+  	last = now;
+  	debug.print(" ");
+  	debug.print(rs485.getStatus(),HEX);
+  	debug.print(" ");
+  	debug.println(b,HEX);
+  }
+  */
 }
 
 

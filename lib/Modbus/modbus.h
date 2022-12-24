@@ -42,6 +42,12 @@
 #define DEVICE_ON 0xff
 
 
+#define SEND_ENABLE_PIN PIN_PA4
+
+// Hardware management of the XDIR pin on a Attiny3224 appears to be unreliable
+// so the pin will be set low for recieve and brought high to send.
+//#define HARDWARE_RS485 1
+
 
 // counters
 
@@ -121,7 +127,14 @@ class Modbus {
                 inputRegisters{inputRegisters} 
                 { };
         void begin() {
+#ifdef HARDWARE_RS485
               rs485->begin(9600, SERIAL_8N1 | SERIAL_RS485);
+#else
+              pinMode(SEND_ENABLE_PIN, OUTPUT);
+              digitalWrite(SEND_ENABLE_PIN, LOW);
+              debug->println("XDIR low");
+              rs485->begin(9600, SERIAL_8N1);
+#endif
               frameBuffer[RESPONSE_FRAME_LEN-1] = 0xee;
               startFrameTimeout = micros();
         };
@@ -172,11 +185,13 @@ class Modbus {
         */
         int8_t readQuery() {
             int8_t functionCode = 0;
-            if ( rs485->available() > 0) {
+            int16_t available =  rs485->available();
+            if ( available > 0) {
                 // was there silence ?
                 unsigned long now = micros();
                 if ( now > startFrameTimeout ) {
                     if ( diagnosticsEnabled && readFramePos > 0) {
+                        debug->print(micros());
                         debug->print(F("New Frame "));
                         debug->println(now-startFrameTimeout);
                     }
@@ -185,6 +200,8 @@ class Modbus {
                     readingFrame = true;
 
                 }
+                debug->print(F(" avaiable "));
+                debug->println(available);
                 while(functionCode == 0) {
                     delayMicroseconds(1041); // 1 char at 9600 baud
                     int16_t b = rs485->read();
@@ -201,10 +218,12 @@ class Modbus {
                             readingFrame = false;
                             framesIgnored++;
                             if ( diagnosticsEnabled ) {
-                                debug->print(F(" Frame Address  "));
+                                debug->print(F(" Ignored Frame: Frame address  "));
                                 debug->print(frameBuffer[FRAME_OFFSET_DEVICE_ADDRESS]);
-                                debug->print(F(" Device address "));
-                                debug->println(deviceAddress);
+                                debug->print(F(" != Device address "));
+                                debug->print(deviceAddress);
+                                debug->print(F(" bytes read "));
+                                debug->println(readFramePos);
                                 dumpFrame(8);
                             }
                         } else if ( readFramePos > FRAME_OFFSET_FUNCTION_CODE ) {
@@ -344,8 +363,14 @@ class Modbus {
                 uint16_t crc = modbus_crc16(&frameBuffer[0], toSend);
                 frameBuffer[toSend++] = (crc>>8)&0xff;
                 frameBuffer[toSend++] = (crc&0xff);
+#ifndef HARDWARE_RS485
+                digitalWrite(SEND_ENABLE_PIN, HIGH);
+#endif
                 rs485->write(frameBuffer, toSend);
                 rs485->flush();
+#ifndef HARDWARE_RS485
+                digitalWrite(SEND_ENABLE_PIN, LOW);
+#endif
 
                 if ( diagnosticsEnabled ) {
                     debug->print("Send Frame:");
@@ -391,8 +416,6 @@ class Modbus {
             int16_t count = getRegisterCount(); 
             if ( !holdingRegisters->isValidRegister(reg) ) {
                 sendFunctionCodeError(EXCEPTION_ILEGAL_DATA_ADDRESS);
-            } else if ( !holdingRegisters->isValidRegister(reg+count) ) {
-                sendFunctionCodeError(EXCEPTION_ILEGAL_DATA_VALUE);
             } else {
               startOutputFrame();
               for(int r = 0; r < count; r++) {     
