@@ -183,7 +183,7 @@ void setup() {
   ntcSensor.addSensor(TEMP_NTC2_PIN, 1);
   ntcSensor.begin();
 
-  commandLine.diagnosticsEnabled = true;
+  commandLine.diagnosticsEnabled = false;
 
 
 	 if (!ina219Ok) {
@@ -223,14 +223,12 @@ int16_t readTemperature(int8_t ch) {
 
 
 void loop() {
-	static unsigned long clKeepAlive = 60000;
-	static unsigned long last = micros();
-	static int state = 0;
-	//unsigned long now = millis();
   commandLine.checkCommand();
   modbus.setDiagnostics(commandLine.diagnosticsEnabled);
   modbus.readQuery();
   /*
+	static int state = 0;
+	static unsigned long last = micros();
   int16_t b = rs485.read();
   unsigned long now = micros();
   if ( b >= 0) {

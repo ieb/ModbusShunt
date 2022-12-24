@@ -89,5 +89,6 @@ The hacky way is to install manually as its not possible to install from a git r
 
 * [x] Basic implementation, with modbus, holding registers and input registers.
 * [x] Implement test client
+* [ ] Test write to holding registers.
 * [ ] Implement current monitoring with auto scaling for different ranges using features of the INA219
 * [ ] Implement deep sleep and wake on watchdog or external event.
