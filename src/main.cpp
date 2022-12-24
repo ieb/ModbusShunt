@@ -70,10 +70,6 @@ class InputRegisterImpl : public InputRegisters {
 					break;
 
 			}
-			debug.print(F("Input Register "));
-			debug.print(reg);
-			debug.print(F(" "));
-			debug.println(value);
 			return value;
 		};
 };
@@ -154,6 +150,9 @@ void readSensors() {
 
 }
 
+void dumpModbusStatus() {
+	modbus.dumpStatus();
+}
 
 
 

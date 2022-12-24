@@ -132,7 +132,6 @@ class Modbus {
 #else
               pinMode(SEND_ENABLE_PIN, OUTPUT);
               digitalWrite(SEND_ENABLE_PIN, LOW);
-              debug->println("XDIR low");
               rs485->begin(9600, SERIAL_8N1);
 #endif
               frameBuffer[RESPONSE_FRAME_LEN-1] = 0xee;
@@ -152,14 +151,14 @@ class Modbus {
         void dumpFrame(uint8_t size) {
             if ( diagnosticsEnabled ) {
                 for(uint8_t i = 0; i < size; i++) {
-                if (frameBuffer[i] < 16) {
-                    debug->print(" 0x0");
-                } else {
-                    debug->print(" 0x");
+                    if (frameBuffer[i] < 16) {
+                        debug->print(F(" 0x0"));
+                    } else {
+                        debug->print(F(" 0x"));
+                    }
+                    debug->print(frameBuffer[i],HEX);
                 }
-                debug->print(frameBuffer[i],HEX);
-                }
-                debug->print("\n");    
+                debug->println("");    
             }
         };
 
@@ -200,8 +199,6 @@ class Modbus {
                     readingFrame = true;
 
                 }
-                debug->print(F(" avaiable "));
-                debug->println(available);
                 while(functionCode == 0) {
                     delayMicroseconds(1041); // 1 char at 9600 baud
                     int16_t b = rs485->read();
@@ -245,11 +242,11 @@ class Modbus {
                                     framesRecieved++;
                                     functionCode = frameBuffer[FRAME_OFFSET_FUNCTION_CODE]; 
                                     if ( diagnosticsEnabled ) {
-                                        debug->print("Full frame, CRC Ok frameLength=");
+                                        debug->print(F("Full frame, CRC Ok frameLength="));
                                         debug->print(readFramePos);
-                                        debug->print(" function=");
+                                        debug->print(F(" function="));
                                         debug->println(functionCode);
-                                        debug->print("Recv Frame:");
+                                        debug->print(F("Recv Frame:"));
                                         dumpFrame(readFramePos);
                                     }
                                     readingFrame = false; 
@@ -373,7 +370,7 @@ class Modbus {
 #endif
 
                 if ( diagnosticsEnabled ) {
-                    debug->print("Send Frame:");
+                    debug->print(F("Send Frame:"));
                 }
                 dumpFrame(toSend);
                 toSend = 0;

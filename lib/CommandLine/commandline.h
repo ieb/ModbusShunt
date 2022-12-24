@@ -6,6 +6,7 @@
 extern int16_t readMCUVoltage();
 extern int16_t readMCUTemperature();
 extern void readSensors();
+extern void dumpModbusStatus();
 
 class CommandLine {
     public:
@@ -76,11 +77,11 @@ class CommandLine {
 
         void loadDefaults() {
             if ( holdingRegisters->crcValid() ) {
-                io->println("Eprom Valid");
+                io->println(F("Eprom Valid"));
                 loadSettings();
 
             } else {
-                io->println("Eprom Not Valid, saving current settings");
+                io->println(F("Eprom Not Valid, saving current settings"));
                 saveSettings();
             }
             showStatus();
@@ -221,6 +222,7 @@ class CommandLine {
             io->print((F("mV T=")));
             io->print(readMCUTemperature());
             io->println((F("C")));
+            dumpModbusStatus();
         };
 
 
