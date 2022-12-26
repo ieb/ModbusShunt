@@ -181,9 +181,12 @@ class Modbus {
         * @brief read a modbus query from the serial line
         * 
         * @return int8_t the modbus function code or 0 if no code
+        * 
+        * Original version had some potential to miss bytes, so re-wrote avoiding delays
+        * and calls to available.
         */
-        int8_t readQuery() {
-            int8_t functionCode = 0;
+        int8_t readQueryOld() {
+            functionCode = 0;
             int16_t available =  rs485->available();
             if ( available > 0) {
                 // was there silence ?
@@ -224,7 +227,7 @@ class Modbus {
                                 dumpFrame(8);
                             }
                         } else if ( readFramePos > FRAME_OFFSET_FUNCTION_CODE ) {
-                            uint8_t frameLength = QUERY_FRAME_LEN;
+                            frameLength = QUERY_FRAME_LEN;
                             switch(frameBuffer[FRAME_OFFSET_FUNCTION_CODE]) {
                                 case 3: 
                                 case 4: 
@@ -269,7 +272,138 @@ class Modbus {
                 }
                 startFrameTimeout = micros() + FRAME_START_SILENCE;
             }
+            processFrame();
+            return functionCode;
+        };
 
+
+        /**
+        * @brief read a modbus query from the serial line
+        * 
+        * @return bool true if a frame was processed, false otherwise.
+        * 
+        * Frames are identified by a silence of 3645us or more.
+        * The expectation is the frame is sent without a silence period.
+        * char 0 is the device address
+        * char 1 is the function code
+        * length of the frame depends on the function code.
+        * While there are chars available, the 
+        * 
+        * It is important that this method is called more frequently than once ever 3645us 
+        * Otherwise it may detect a frame start when there is none.
+        * 
+        * If this becomes a problem, it might be better to use an ISR somehow.
+        * Currently there are 10us between calls.
+        */
+        bool readQuery() {
+            unsigned long now = micros();
+            int8_t nread = 0;
+            int16_t b = rs485->read();
+            while ( b >= 0 ) {
+                now = micros();
+                uint8_t inb = (0xff&b);
+                if ( now > startFrameTimeout ) {
+                    // new frame, first char is the deviceAddress
+                    readFramePos = 0;
+                    if ( inb == deviceAddress ) {
+                        readingFrame = true;
+                        frameLength = QUERY_FRAME_LEN;
+                    } else {
+                        readingFrame = false;
+                        framesIgnored++;
+                    }
+
+                    // diag logging
+                    if ( diagnosticsEnabled ) {
+                        debug->print(F("New Frame "));
+                        debug->print(now-startFrameTimeout);
+                        debug->print(F(" device="));
+                        debug->print(inb);
+                        if ( readingFrame ){
+                            debug->println(F("  processing"));
+                        } else {
+                            debug->println(F("  ignored"));                            
+                        }
+                    }
+
+                }
+                startFrameTimeout = now + FRAME_START_SILENCE;
+                if ( readFramePos >= QUERY_FRAME_LEN-1 ) {
+                    bufferOverrun++;
+                    readingFrame = false;
+                    return false;
+                }
+                // calculate new frame timeout time.
+
+                if ( readingFrame ) {
+                    if ( readFramePos == FRAME_OFFSET_FUNCTION_CODE ) {
+                        functionCode = inb; 
+                        switch(functionCode) {
+                            case 3: 
+                            case 4: 
+                            case 6: 
+                            frameLength = 8;
+                            break;
+                            case 17: 
+                            frameLength = 4; 
+                            break;
+                        }
+                    }
+                    frameBuffer[readFramePos++] = inb;
+                    if (readFramePos >= frameLength) {
+                        // check the CRC.
+                        uint16_t crcValue = modbus_crc16(&frameBuffer[0], frameLength-2);
+                        uint16_t crcFrameValue = getUInt16(frameLength-2);
+                        if (crcValue == crcFrameValue ) {
+                            if ( diagnosticsEnabled ) {
+                                debug->print(F("Full frame, CRC Ok frameLength="));
+                                debug->print(readFramePos);
+                                debug->print(F(" function="));
+                                debug->println(functionCode);
+                                debug->print(F("Recv Frame:"));
+                                dumpFrame(readFramePos);
+                            }
+                            processFrame();
+                            readingFrame = false;
+                            framesRecieved++;
+                            return true;
+                        } else {
+                            if ( diagnosticsEnabled ) {
+                                debug->print(F("CRC from 0 for "));
+                                debug->print(frameLength-2);
+                                debug->print(F(" is calculated: "));
+                                debug->print(crcValue,HEX);
+                                debug->print(F("  recieved: "));
+                                debug->println(crcFrameValue,HEX);
+                            }
+                            readingFrame = false;
+                            framesErrorRecieved++;
+                            return false;
+                        } 
+                    }
+                } else {
+                    nread++;
+                    // dont try and skip too many character is one call
+                    // otherwise the watchdog timer my kill the main loop.
+                    if (nread > 12) {
+                        return false;
+                    }
+                }
+                // read next char
+                for (int i = 0; i < 2; i++ ) {
+                    // read char already recieved if available.
+                    b = rs485->read();
+                    if ( b >= 0 ) {
+                        break;
+                    }
+                    delayMicroseconds(1041); // delay 1 char at 9600 baud if no char already available.
+                }
+            }
+            return false;
+        };
+
+
+        void processFrame() {
             switch(functionCode) {
                 case 0: 
                     // noop
@@ -286,14 +420,10 @@ class Modbus {
                 case 17:
                     writeSlaveId();
                     break;
-                  default:
+                default:
                     sendFunctionCodeError(EXCEPTION_ILEGAL_FUNCTION);
-            }
-            return functionCode;
+            }            
         };
-
-
-
 
 
 
@@ -305,6 +435,8 @@ class Modbus {
         uint8_t deviceAddress = 0x00;
         bool ignoreFrame = false;
         uint8_t readFramePos = 0;
+        uint8_t frameLength = QUERY_FRAME_LEN;
+        uint8_t functionCode = 0;
         uint8_t toSend = 0;
         byte frameBuffer[RESPONSE_FRAME_LEN];
         uint16_t  framesRecieved=0;

@@ -85,13 +85,14 @@ Ina219 ina219(&debug);
 CommandLine commandLine(&debug, &holdingRegisters, &inputRegisters);
 NtcSensor ntcSensor(&debug);
 
+float averageVoltage = 0;
+float averageCurrent = 0;
 
 // must be volatile so the compiler doesnt optimnise
 bool ina219Ok = true;
 
-/*
-volatile bool shouldWakeUp=false;
 
+/*
 // see https://github.com/SpenceKonde/megaTinyCore/blob/e59fc3046dd69f951497506e8f441a6818c28be5/megaavr/extras/Ref_PinInterrupts.md
 // Used to detect wake up from sleep.
 ISR(PORTA_PORT_vect) {
@@ -103,6 +104,7 @@ ISR(PORTA_PORT_vect) {
 	}
 }
 */
+
 
 int16_t readMCUVoltage() {
     analogReference(INTERNAL1V024);
@@ -190,25 +192,17 @@ void setup() {
 	 }
 	 debug.println(F("Press h for help menu"));
 
+	 // setup sleep mode
+	 set_sleep_mode(SLEEP_MODE_STANDBY);
+	 sleep_enable();
+
 }
 
 int16_t readVoltage() {
-	int16_t voltage =  (int16_t)(1000.0*ina219.getVoltage());
-	if ( ina219.getError() != I2C_OK) {
-		errorBitmap |= 0x0100;
-	} else {
-		errorBitmap &= 0xFEFF;
-	}
-	return voltage;
+	return (int16_t)(1000.0*averageVoltage);;
 }
 int16_t readCurrent() {
-	int16_t current =  (int16_t)(100*ina219.getCurrent());
-	if ( ina219.getError() != I2C_OK) {
-		errorBitmap |= 0x0200;
-	} else {
-		errorBitmap &= 0xFDFF;
-	}
-	return current;
+	return  (int16_t)(100*averageCurrent);
 }
 
 int16_t readTemperature(int8_t ch) {
@@ -217,29 +211,66 @@ int16_t readTemperature(int8_t ch) {
 }
 
 
+void readShunt() {
+	static unsigned long lastRead = 0;
+	unsigned long now = millis();
+	if ((now - lastRead) > 5000 ) {
 
+		if ( lastRead == 0 ) {
+				averageVoltage = ina219.getVoltage();
+				averageCurrent = ina219.getCurrent();
+		}
+		lastRead = now;
+		averageVoltage = averageVoltage*0.9 + ina219.getVoltage()*0.1;
+		if ( ina219.getError() != I2C_OK) {
+			errorBitmap |= 0x0100;
+		} else {
+			errorBitmap &= 0xFDFF;
+		}
+		averageCurrent = averageCurrent*0.9 + ina219.getCurrent()*0.1;
+		if ( ina219.getError() != I2C_OK) {
+			errorBitmap |= 0x0200;
+		} else {
+			errorBitmap &= 0xFDFF;
+		}
+	}
+}
+
+
+void powerDownSleep() {
+		ina219.powerDown(true);
+
+		//USART0.STATUS &= ~(1<< 4); // enable RXSIF (Rx start frame interupt flag)
+		USART0.CTRLB |= 1<<4; // set the SFDEN bit, start of frame detection.
+		//USART1.STATUS &= ~(1<< 4); // enable RXSIF (Rx start frame interupt flag)
+		USART1.CTRLB |= 1<<4; // set the SFDEN bit, start of frame detection.
+		sleep_cpu();
+		// Not required, RX clears it. USART0.CTRLB != 1<<4; // clear the SFDEN bit, start of frame detection.
+		ina219.powerDown(false);
+
+}
 
 
 
 void loop() {
-  commandLine.checkCommand();
-  modbus.setDiagnostics(commandLine.diagnosticsEnabled);
-  modbus.readQuery();
-  /*
-	static int state = 0;
-	static unsigned long last = micros();
-  int16_t b = rs485.read();
-  unsigned long now = micros();
-  if ( b >= 0) {
+	static unsigned long lastActivity = millis();
+  unsigned long now = millis(); 
+  readShunt();
 
-  	debug.print(now-last);
-  	last = now;
-  	debug.print(" ");
-  	debug.print(rs485.getStatus(),HEX);
-  	debug.print(" ");
-  	debug.println(b,HEX);
+  if ( commandLine.checkCommand() ) {
+  	lastActivity = now;  	
   }
-  */
+  modbus.setDiagnostics(commandLine.diagnosticsEnabled);
+  if ( modbus.readQuery() ) {
+  	lastActivity = now;
+  }
+  if ( (now - lastActivity) > 60000  ) {
+  	debug.println(F("sleeping"));
+  	debug.flush();
+  	powerDownSleep();
+  	debug.println(F("wakeup"));
+  	lastActivity = millis();
+  }
 }
 
 
