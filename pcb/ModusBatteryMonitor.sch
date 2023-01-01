@@ -414,9 +414,9 @@ F 3 "" H 3700 2100 60  0001 C CNN
 	1    3700 2100
 	1    0    0    -1  
 $EndComp
-Text GLabel 9700 3450 2    60   BiDi ~ 0
-RS485-A
 Text GLabel 9700 3650 2    60   BiDi ~ 0
+RS485-A
+Text GLabel 9700 3450 2    60   BiDi ~ 0
 RS485-B
 $Comp
 L CONN_1 P105
