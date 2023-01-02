@@ -54,10 +54,10 @@ class InputRegisterImpl : public InputRegisters {
 					value = readCurrent();
 					break;
 				case 2:
-					value = readTemperature(1);
+					value = readTemperature(0);
 					break;
 				case 3: 
-					value = readTemperature(2);
+					value = readTemperature(1);
 					break;
 				case 4: 
 					value = (errorBitmap & 0xFF00) | rs485.getStatus();
@@ -66,7 +66,7 @@ class InputRegisterImpl : public InputRegisters {
 					value =  readMCUVoltage();
 					break;
 				case 6:
-					value = 10*readMCUTemperature();
+					value = 100*readMCUTemperature();
 					break;
 
 			}
@@ -74,8 +74,8 @@ class InputRegisterImpl : public InputRegisters {
 		};
 };
 // pins
-#define TEMP_NTC1_PIN PIN_PA4  // hardware pin 2
-#define TEMP_NTC2_PIN PIN_PA5  // hardware pin 3
+#define TEMP_NTC1_PIN PIN_PA5  // hardware pin 3
+#define TEMP_NTC2_PIN PIN_PA6  // hardware pin 4
 
 
 InputRegisterImpl inputRegisters = InputRegisterImpl();
@@ -138,7 +138,6 @@ void readSensors() {
 		// 10mA per bit 320A  0.01*32000
 	  int16_t current = (int16_t)(100*ina219.getCurrent());
 		// temperature 0.01C per bit, 320C max
-		ntcSensor.refresh();
 		int16_t temp1 = ntcSensor.getTemperature(0);
 		int16_t temp2 = ntcSensor.getTemperature(1);
 		uint16_t tons = millis()/1000;
@@ -146,8 +145,8 @@ void readSensors() {
 		debug.print(F(" v="));debug.print(voltage);
 		debug.print(F(" mV c="));debug.print(current);
 		debug.print(F(" 10mA t1="));debug.print(temp1);
-		debug.print(F(" C t2="));debug.print(temp2);
-		debug.print(F(" C tons="));debug.print(tons);
+		debug.print(F(" 0.01C t2="));debug.print(temp2);
+		debug.print(F(" 0.01C tons="));debug.print(tons);
 		debug.println("");
 
 }
@@ -179,7 +178,6 @@ void setup() {
   modbus.setDeviceAddress(commandLine.deviceAddress);
   modbus.begin();
 
-
   ntcSensor.addSensor(TEMP_NTC1_PIN, 0);
   ntcSensor.addSensor(TEMP_NTC2_PIN, 1);
   ntcSensor.begin();
@@ -206,7 +204,6 @@ int16_t readCurrent() {
 }
 
 int16_t readTemperature(int8_t ch) {
-	ntcSensor.refresh();
 	return ntcSensor.getTemperature(ch);
 }
 
