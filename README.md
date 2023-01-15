@@ -93,5 +93,6 @@ The hacky way is to install manually as its not possible to install from a git r
 * [x] Implement sleep mode, wake on frame
 * [x] Average current and voltage over time period, eg 30s
 * [x] Test frame handling of packets for other units.
+* [x] Calibrate NTC sensors.
 * [ ] Test write to holding registers.
 * [ ] Implement current monitoring with auto scaling for different ranges using features of the INA219

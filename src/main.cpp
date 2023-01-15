@@ -21,6 +21,7 @@
 #include "ina219.h"
 #include "ntcsensor.h"
 #include "modbus.h"
+#include "oled.h"
 
 
 extern int16_t readVoltage();
@@ -84,6 +85,7 @@ Modbus modbus = Modbus(&rs485, &debug, &holdingRegisters, &inputRegisters);
 Ina219 ina219(&debug);
 CommandLine commandLine(&debug, &holdingRegisters, &inputRegisters);
 NtcSensor ntcSensor(&debug);
+Oled oled;
 
 float averageVoltage = 0;
 float averageCurrent = 0;
@@ -182,6 +184,8 @@ void setup() {
   ntcSensor.addSensor(TEMP_NTC2_PIN, 1);
   ntcSensor.begin();
 
+  oled.begin();
+
   commandLine.diagnosticsEnabled = false;
 
 
@@ -212,30 +216,43 @@ void readShunt() {
 	static unsigned long lastRead = 0;
 	unsigned long now = millis();
 	if ((now - lastRead) > 5000 ) {
+		float voltage = ina219.getVoltage();
+		float current = ina219.getCurrent();
+		int16_t temp1 = readTemperature(0);
+		int16_t temp2 = readTemperature(1);
+
 
 		if ( lastRead == 0 ) {
-				averageVoltage = ina219.getVoltage();
-				averageCurrent = ina219.getCurrent();
+				averageVoltage = voltage;
+				averageCurrent = current;
 		}
 		lastRead = now;
-		averageVoltage = averageVoltage*0.9 + ina219.getVoltage()*0.1;
+		averageVoltage = averageVoltage*0.9 + voltage*0.1;
 		if ( ina219.getError() != I2C_OK) {
 			errorBitmap |= 0x0100;
 		} else {
 			errorBitmap &= 0xFDFF;
 		}
-		averageCurrent = averageCurrent*0.9 + ina219.getCurrent()*0.1;
+		averageCurrent = averageCurrent*0.9 + current*0.1;
 		if ( ina219.getError() != I2C_OK) {
 			errorBitmap |= 0x0200;
 		} else {
 			errorBitmap &= 0xFDFF;
 		}
+
+		oled.voltage = 100*voltage;
+		oled.current = 100*current;
+		oled.temp1 = temp1;
+		oled.temp2 = temp2;
+		oled.update();
+
 	}
 }
 
 
 void powerDownSleep() {
 		ina219.powerDown(true);
+		oled.powerDown(true);
 
 		//USART0.STATUS &= ~(1<< 4); // enable RXSIF (Rx start frame interupt flag)
 		USART0.CTRLB |= 1<<4; // set the SFDEN bit, start of frame detection.
@@ -244,6 +261,7 @@ void powerDownSleep() {
 		sleep_cpu();
 		// Not required, RX clears it. USART0.CTRLB != 1<<4; // clear the SFDEN bit, start of frame detection.
 		ina219.powerDown(false);
+		oled.powerDown(false);
 
 }
 
@@ -259,6 +277,7 @@ void loop() {
   }
   modbus.setDiagnostics(commandLine.diagnosticsEnabled);
   if ( modbus.readQuery() ) {
+  	oled.messages++;
   	lastActivity = now;
   }
   if ( (now - lastActivity) > 60000  ) {

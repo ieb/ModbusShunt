@@ -477,4 +477,36 @@ F 3 "" H 9500 4650 60  0001 C CNN
 	1    9500 4650
 	1    0    0    -1  
 $EndComp
+Text Notes 8800 1400 0    60   ~ 0
+TEMP1 and TEMP2 are dual purpose. in ADC mode, \nthey can read a NCT. In Digital mode with no NCT \nconnected, they can be used inputs. They can also \nbe used as ADC pulldown inputs with NCT present. 
+$Comp
+L CONN_4 P?
+U 1 1 63C10AA1
+P 5600 3500
+F 0 "P?" V 5550 3500 50  0000 C CNN
+F 1 "OLED" V 5650 3500 50  0000 C CNN
+F 2 "" H 5600 3500 60  0001 C CNN
+F 3 "" H 5600 3500 60  0001 C CNN
+	1    5600 3500
+	-1   0    0    1   
+$EndComp
+Text GLabel 5950 3650 2    60   BiDi ~ 0
+5V
+$Comp
+L GND #PWR?
+U 1 1 63C10B8E
+P 5950 3550
+F 0 "#PWR?" H 5950 3550 30  0001 C CNN
+F 1 "GND" H 5950 3480 30  0001 C CNN
+F 2 "" H 5950 3550 60  0001 C CNN
+F 3 "" H 5950 3550 60  0001 C CNN
+	1    5950 3550
+	1    0    0    -1  
+$EndComp
+Text GLabel 5950 3450 2    60   BiDi ~ 0
+SCL
+Text GLabel 5950 3350 2    60   BiDi ~ 0
+SDA
+Text Notes 4650 3950 0    60   ~ 0
+Could drop this and connect I2C \nto top of INA219 module
 $EndSCHEMATC
